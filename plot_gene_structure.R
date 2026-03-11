@@ -3,7 +3,7 @@ library(argparse)
 library(ggplot2)
 
 # 1. 设置参数解析
-parser <- ArgumentParser(description='专业版：基因结构（含 UTR 比例）与 SNP 标注工具')
+parser <- ArgumentParser(description='专业版：基因结构（含 UTR 比例、SNP 标注及图例）工具')
 parser$add_argument("-i", "--input", required=TRUE, help="输入的 GFF3 文件路径")
 parser$add_argument("-o", "--output", default="gene_plot_final.pdf", help="输出文件名")
 parser$add_argument("-c", "--color", default="#2A9D8F", help="CDS 区域的颜色")
@@ -33,12 +33,11 @@ title_name <- ifelse(is.null(args$title), gsub(".gff", "", basename(args$input))
 y_min_cds <- 1 - args$cds_h
 y_max_cds <- 1 + args$cds_h
 
-# 计算 UTR 高度
 utr_h <- args$cds_h * args$utr_h_ratio
 y_min_utr <- 1 - utr_h
 y_max_utr <- 1 + utr_h
 
-label_y_pos <- min(y_min_cds, y_min_utr) - 0.05 
+label_y_pos <- min(y_min_cds, y_min_utr) - 0.05
 y_upper_limit <- if (!is.null(args$snps)) 1.6 else max(y_max_cds, y_max_utr) + 0.1
 
 # 4. 构建图层
@@ -47,13 +46,15 @@ p <- ggplot() +
   geom_segment(aes(x = gene_range$start, xend = gene_range$end, y = 1, yend = 1), 
                linewidth = 0.8, color = "black") +
   
-  # B. UTR 矩形
-  geom_rect(data = utr_regions, aes(xmin = start, xmax = end, ymin = y_min_utr, ymax = y_max_utr),
-            fill = args$utr_color, color = "black", linewidth = 0.3) +
+  # B. UTR 矩形 (添加 fill 映射以生成图例)
+  geom_rect(data = utr_regions, 
+            aes(xmin = start, xmax = end, ymin = y_min_utr, ymax = y_max_utr, fill = "UTR"),
+            color = "black", linewidth = 0.3) +
   
-  # C. CDS 矩形
-  geom_rect(data = cds_regions, aes(xmin = start, xmax = end, ymin = y_min_cds, ymax = y_max_cds),
-            fill = args$color, color = "black", linewidth = 0.3) +
+  # C. CDS 矩形 (添加 fill 映射以生成图例)
+  geom_rect(data = cds_regions, 
+            aes(xmin = start, xmax = end, ymin = y_min_cds, ymax = y_max_cds, fill = "CDS"),
+            color = "black", linewidth = 0.3) +
   
   # D. 基因起始终止坐标
   annotate("text", x = gene_range$start, y = label_y_pos, label = gene_range$start, 
@@ -72,14 +73,19 @@ if (!is.null(args$snps) && args$snps != "") {
   }
 }
 
-# 6. 纯净主题
-p <- p + scale_y_continuous(limits = c(0.4, y_upper_limit)) +
+# 6. 颜色手册与主题美化
+p <- p + 
+  # 手动设置图例颜色
+  scale_fill_manual(name = "Gene Structure", 
+                    values = c("CDS" = args$color, "UTR" = args$utr_color)) +
+  scale_y_continuous(limits = c(0.4, y_upper_limit)) +
   coord_cartesian(clip = "off") +
   theme_minimal() +
   theme(
     axis.text = element_blank(),
     axis.ticks = element_blank(),
     panel.grid = element_blank(),
+    legend.position = "right",          # 图例放在右侧
     plot.margin = unit(c(1, 1, 1, 1), "lines"),
     plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
     axis.title.x = element_text(size = 12, margin = margin(t = 15))
